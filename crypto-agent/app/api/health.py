@@ -3,14 +3,13 @@ Health and readiness endpoints.
 
 /health   -> liveness: is the process up at all.
 /readiness -> readiness: are dependencies (db, cache, etc.) reachable.
-              At this phase there are no real dependencies wired in yet,
-              so readiness checks are stubbed but structured for future use.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter
 
 from app.config.settings import get_settings
+from app.database.session import ping_database
 from app.schemas.health import HealthResponse, ReadinessResponse
 
 router = APIRouter(tags=["health"])
@@ -30,13 +29,14 @@ async def health() -> HealthResponse:
 
 @router.get("/readiness", response_model=ReadinessResponse)
 async def readiness() -> ReadinessResponse:
-    # Phase 1: no external dependencies are wired up yet (no DB session,
-    # no Redis client). This endpoint exists now so later phases can add
-    # real checks (db.ping(), redis.ping(), ...) without changing the
-    # contract that callers/monitoring already depend on.
+    db_ok = await ping_database()
+
     checks = {
-        "database": "not_configured",
+        "database": "ok" if db_ok else "unreachable",
+        # Redis isn't used by anything yet (no cache/queue consumer exists),
+        # so it's intentionally left unchecked rather than reported as a
+        # false "ok" — this becomes a real check once something depends on it.
         "cache": "not_configured",
     }
-    overall = "ok" if all(v in ("ok", "not_configured") for v in checks.values()) else "degraded"
+    overall = "ok" if checks["database"] == "ok" else "degraded"
     return ReadinessResponse(status=overall, checks=checks)

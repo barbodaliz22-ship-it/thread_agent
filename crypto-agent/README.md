@@ -4,10 +4,24 @@ An autonomous crypto **market research** system: it collects data, evaluates
 strategies and analyst predictions, and runs backtests / paper trading. It
 does **not** trade real money in its current phase.
 
-## Project status: Phase 1 — Foundation
+## Project status: Phase 2 — Database layer
 
-This phase only establishes the project skeleton. No data collection,
-strategies, or execution logic exist yet. What's here:
+Phase 1 (foundation) plus:
+
+- SQLAlchemy async engine/session (`app/database/session.py`)
+- First ORM model: `OHLCVBar` (`app/models/market_data.py`) — carries
+  `source`, `asset`, `timeframe`, business `timestamp`, `ingested_at`, and
+  `quality_status` on every row, per the data-quality rules in section 6
+  of the Master Prompt. A unique constraint on
+  `(source, asset, timeframe, timestamp)` prevents duplicate bars at the
+  DB level.
+- Alembic migrations (`migrations/`), with an initial migration that
+  creates the `ohlcv_bars` table.
+- `/readiness` now actually pings the database instead of returning a
+  stub.
+
+Still not present: no data provider is wired up yet (nothing calls an
+exchange API), no strategies, no execution. Phase 1 items remain:
 
 - App configuration via environment variables (`app/config`)
 - Structured (JSON) logging (`app/config/logging_config.py`)
@@ -61,6 +75,20 @@ docker compose up --build
 pytest
 ```
 
+## Running database migrations
+
+Requires a running Postgres (via `docker compose up postgres` or your own):
+
+```bash
+alembic upgrade head
+```
+
+To create a new migration after changing a model:
+
+```bash
+alembic revision --autogenerate -m "describe the change"
+```
+
 ## Project layout
 
 ```text
@@ -94,8 +122,11 @@ crypto-agent/
 
 ## Roadmap (next phases)
 
-1. ~~Foundation: config, logging, health endpoint, Docker, tests~~ ← you are here
-2. Database layer: SQLAlchemy models, Alembic migrations, market data ingestion
+1. ~~Foundation: config, logging, health endpoint, Docker, tests~~
+2. ~~Database layer: SQLAlchemy models, Alembic migrations~~ ← you are here
+   (note: model + migration exist; an actual market-data *provider* that
+   fetches and writes real OHLCV rows is still Phase 2 unfinished business
+   or early Phase 3, depending on how you want to sequence it)
 3. Research layer: analyst/prediction tracking with pre-outcome timestamping
 4. Analysis + regime detection, multi-layer signal combination
 5. Backtesting engine + risk management layer
